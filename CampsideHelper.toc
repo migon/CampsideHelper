@@ -1,0 +1,9 @@
+## Interface: 16001
+## Title: Campside Helper
+## Notes: Shows buffs for campsite objects in tooltips.
+## Author: Antigravity
+## Version: 1.0
+## Category: Tooltip
+## X-Category: Tooltips
+
+CampsideHelper.lua
