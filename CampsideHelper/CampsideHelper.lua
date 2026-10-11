@@ -54,6 +54,7 @@ local CampsideItemBuffs = {
     ["Journeyman Campfire Kit"] = { desc = "Allows placement of 5 campsite objects" },
     ["Expert Campfire Kit"] = { desc = "Allows placement of 10 campsite objects" },
     ["Cookie's Feast"] = { desc = "Allows placement of 10 campsite objects" },
+    ["Iron Oven"] = { desc = "Station for advanced cooking recipes" },
 
     -- Enchanting (MotW)
     ["Enchanted Lute"] = { desc = function(lvl) return GetEnchantingText(lvl) end, excl = "Mark of the Wild" },
@@ -82,6 +83,7 @@ local CampsideItemBuffs = {
 
     -- Leatherworking (Static)
     ["Camp Tent"] = { desc = "Restores Rested XP up to 5% of a level" },
+    ["Tent"] = { desc = "Restores Rested XP up to 5% of a level" },
     ["Tanning Rack"] = { desc = "Restores Rested XP up to 5% of a level + Leatherworking station" },
     ["Sewing Machine"] = { desc = "Restores Rested XP up to 5% of a level + Tailoring station" },
 
@@ -92,6 +94,7 @@ local CampsideItemBuffs = {
 
     -- Skinning (Static Percentage)
     ["Camp Chair"] = { desc = "Increases Critical Strike chance by 2%", excl = "Moonkin Aura" },
+    ["Chair"] = { desc = "Increases Critical Strike chance by 2%", excl = "Moonkin Aura" },
     ["Field Guide"] = { desc = "Increases Critical Strike chance by 2%", excl = "Moonkin Aura" },
     ["Trapper's Workbench"] = { desc = "Increases Critical Strike chance by 2%", excl = "Moonkin Aura" },
 
@@ -105,33 +108,50 @@ local CampsideItemBuffs = {
 local function OnTooltipUpdate(tooltip)
     -- Zjistíme jméno objektu ve světě (zpravidla je na prvním řádku tooltipu)
     local objectName = GameTooltipTextLeft1 and GameTooltipTextLeft1:GetText()
+    if not objectName then return end
+
+    -- Ochrana proti Blizzard Secret Values (zabezpečené / chráněné řetězce v novějších klientech)
+    if issecretvalue and issecretvalue(objectName) then return end
+
+    -- Pokud už jsme tento objekt zpracovali, hned skončíme (šetří výkon)
+    local isProcessed = false
+    pcall(function()
+        isProcessed = (tooltip.campsideLastProcessed == objectName)
+    end)
+    if isProcessed then return end
+
+    -- Bezpečné vyhledání v databázi přes pcall (ochrana proti nepovoleným klíčům)
+    local ok, data = pcall(function() return CampsideItemBuffs[objectName] end)
+    if not ok or not data then return end
+
+    -- Ochrana: zkontrolujeme, zda nejde o předmět v batohu nebo o postavu
+    local isUnit = false
+    pcall(function() isUnit = (tooltip:GetUnit() ~= nil) end)
+    if isUnit then return end
+
+    local hasItem = false
+    pcall(function()
+        local _, link = tooltip:GetItem()
+        hasItem = (link ~= nil)
+    end)
+    if hasItem then return end
+
+    -- Uložíme si, že jsme tento objekt už upravili
+    tooltip.campsideLastProcessed = objectName
+
+    local playerLevel = 1
+    pcall(function()
+        playerLevel = UnitLevel("player") or 1
+    end)
+
+    local descriptionText = type(data.desc) == "function" and data.desc(playerLevel) or data.desc
     
-    -- Pokud už jsme tento objekt zpracovali, hned skončíme (šetří výkon, OnUpdate běží neustále)
-    if tooltip.campsideLastProcessed == objectName then return end
-
-    if objectName then
-        local data = CampsideItemBuffs[objectName]
-        
-        if data then
-            -- Ochrana: zkontrolujeme, zda nejde o předmět v batohu nebo o postavu
-            local _, link = tooltip:GetItem()
-            if link then return end
-            if tooltip:GetUnit() then return end
-            
-            -- Uložíme si, že jsme tento objekt už upravili
-            tooltip.campsideLastProcessed = objectName
-
-            local playerLevel = UnitLevel("player") or 1
-            local descriptionText = type(data.desc) == "function" and data.desc(playerLevel) or data.desc
-            
-            tooltip:AddLine(" ")
-            tooltip:AddLine("Campsite Buff: " .. descriptionText, 0.1, 0.9, 0.1, true)
-            if data.excl then
-                tooltip:AddLine("Exclusive with: " .. data.excl, 1.0, 0.5, 0.0, true)
-            end
-            tooltip:Show()
-        end
+    tooltip:AddLine(" ")
+    tooltip:AddLine("Campsite Buff: " .. descriptionText, 0.1, 0.9, 0.1, true)
+    if data.excl then
+        tooltip:AddLine("Exclusive with: " .. data.excl, 1.0, 0.5, 0.0, true)
     end
+    tooltip:Show()
 end
 
 -- Objektům ve světě se tooltip někdy jen dynamicky přepíše bez schování/zobrazení okna. OnUpdate to zachytí vždy.
